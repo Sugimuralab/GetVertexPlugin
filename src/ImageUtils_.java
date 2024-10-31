@@ -15,14 +15,9 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.awt.Point;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Stack;
 import java.awt.Color;
+import java.util.*;
+
 
 
 public class ImageUtils_ {
@@ -558,17 +553,18 @@ public class ImageUtils_ {
     /**
      * Identifies and sets vertex points in an image.
      *
-     * @param ip      The ImageProcessor containing the image data.
-     * @param ctypes A char array representing the 8-neighbor types of each pixel.
-     * @param CellID A int array storing the cell ID for each pixel.
+     * @param ip                The ImageProcessor containing the image data.
+     * @param ctypes            A char array representing the 8-neighbor types of each pixel.
+     * @param CellID            An int array storing the cell ID for each pixel.
+     * @param isolated_terminals A list to store indices of isolated terminals.
      * @return A list of Vertex_ objects representing the identified vertices.
      */
-    public static List<Vertex_> Set_Vertex_(ImageProcessor ip, char[] ctypes, int[] CellID) {
+    public static List<Vertex_> Set_Vertex_(ImageProcessor ip, char[] ctypes, int[] CellID, List<Integer> isolated_terminals) {
         int j_num = 0;
         int width = ip.getWidth();
         List<Vertex_> vvtxs = new ArrayList<>();
         int[] npb = {-width, -1, 1, width, -width - 1, -width + 1, width - 1, width + 1}; // Neighbor pixel offsets
-    
+
         // Identify crossing, bifurcating, and terminal pixels
         for (int y = 1; y < ip.getHeight() - 1; y++) {
             for (int x = 1; x < ip.getWidth() - 1; x++) {
@@ -578,18 +574,27 @@ public class ImageUtils_ {
                     tvtx.Cells = new ArrayList<>();
                     tvtx.x = x;
                     tvtx.y = y;
-                
+
                     for (int k = 0; k < 8; k++) {
                         int neighbor_id = id + npb[k];
-                        if (CellID[neighbor_id] != 0 && CellID[neighbor_id] != 1) { // Check if valid cell ID
-                            tvtx.Cells.add(CellID[neighbor_id]);
-                        }
+                        tvtx.Cells.add(CellID[neighbor_id]);
                     }
-                
+
                     // Remove duplicates
-                    tvtx.Cells = new ArrayList<>(new HashSet<>(tvtx.Cells));
-                    // Sort cells if necessary
+                    Set<Integer> set = new HashSet<>(tvtx.Cells);
+                    tvtx.Cells = new ArrayList<>(set);
                     Collections.sort(tvtx.Cells);
+
+                    // Handle isolated terminals
+                    if (tvtx.Cells.size() == 2 && tvtx.Cells.get(0) == 0 && tvtx.Cells.get(1) != 1) {
+                        System.out.println(x + " " + y);
+                        isolated_terminals.add(id);
+                        continue;
+                    }
+
+                    // Remove cells with IDs 0 and 1
+                    tvtx.Cells.removeIf(cellId -> cellId == 0 || cellId == 1);
+
                     // Set inout based on the number of cells
                     tvtx.inout = (tvtx.Cells.size() == 0) ? 'o' : 'i';
                     tvtx.ctype = ctypes[id];
@@ -598,17 +603,181 @@ public class ImageUtils_ {
                 }
             }
         }
-    
-        // Sort by number of cells
+
+        // Sort by inout
         vvtxs.sort(JInOutComparator);
         // Assign unique IDs
         for (int i = 0; i < vvtxs.size(); i++) {
             vvtxs.get(i).id = i;
         }
-    
+
         return vvtxs;
     }
-    
+
+    // Comparator for Point to use in TreeMap
+    static class PointComparator implements Comparator<Point> {
+        @Override
+        public int compare(Point a, Point b) {
+            if (a.y != b.y) {
+                return Integer.compare(a.y, b.y);
+            } else {
+                return Integer.compare(a.x, b.x);
+            }
+        }
+    }
+
+    /**
+     * Reconnects contours in the image by handling isolated terminals.
+     *
+     * @param ip                The ImageProcessor containing the image data.
+     * @param ctypes            A char array representing the 8-neighbor types of each pixel.
+     * @param conts             A list of contours, each contour is a list of int[] points.
+     * @param ijunc             A list of Vertex_ objects representing junctions.
+     * @param isolated_terminals A list of indices of isolated terminals.
+     */
+    public static List<List<int[]>> Reconnect_Contours(ImageProcessor ip, char[] ctypes, List<List<int[]>> conts, List<Vertex_> ijunc, List<Integer> isolated_terminals) {
+        int width = ip.getWidth();
+
+        // For each isolated terminal
+        for (int i = 0; i < isolated_terminals.size(); i++) {
+
+            Set<Integer> contours_to_remove = new HashSet<>();
+            List<List<int[]>> contours_to_add = new ArrayList<>();
+
+            // Map from String (point key) to list of contour indices
+            Map<String, List<Integer>> point_to_contours = new HashMap<>();
+
+            // Build the map of points to contours
+            for (int ci = 0; ci < conts.size(); ci++) {
+                List<int[]> c = conts.get(ci);
+                int[] p_front = c.get(0);
+                int[] p_back = c.get(c.size() - 1);
+
+                String key_front = p_front[0] + "," + p_front[1];
+                point_to_contours.computeIfAbsent(key_front, k -> new ArrayList<>()).add(ci);
+
+                if (p_back[0] != p_front[0] || p_back[1] != p_front[1]) { // Avoid duplicating if contour is a loop
+                    String key_back = p_back[0] + "," + p_back[1];
+                    point_to_contours.computeIfAbsent(key_back, k -> new ArrayList<>()).add(ci);
+                }
+            }
+
+            int idx = isolated_terminals.get(i);
+            int x = idx % width;
+            int y = idx / width;
+            int[] T1 = new int[]{x, y};
+            String key_T1 = T1[0] + "," + T1[1];
+
+            // IJ.log(String.format("Trying to delete %s", key_T1));
+
+            // Find contours connected to T1
+            List<Integer> c1_indices = point_to_contours.get(key_T1);
+            if (c1_indices == null) {
+                continue; // No contours connected to T1
+            }
+            if (c1_indices.size() != 1) {
+                throw new RuntimeException("More than one contour connected to isolated terminal.");
+            }
+            int c1_idx = c1_indices.get(0);
+            List<int[]> c1 = conts.get(c1_idx);
+
+            for (int[] j : c1) {
+                int idx_j = j[1] * width + j[0];
+                ctypes[idx_j] = 'd';
+            }
+
+            int[] V1 = (c1.get(0)[0] == T1[0] && c1.get(0)[1] == T1[1]) ? c1.get(c1.size() -1) : c1.get(0);
+            String key_V1 = V1[0] + "," + V1[1];
+
+            // Now find contours c2 (other than c1) that share V1
+            List<Integer> c2_indices = new ArrayList<>(point_to_contours.get(key_V1));
+
+            if (!c2_indices.remove((Integer) c1_idx)) {
+                throw new RuntimeException("Not found c1 at V1");
+            }
+
+            if (c2_indices.size() != 2) {
+                // More than 2 contours meet at one junction or island
+                contours_to_remove.add(c1_idx);
+
+                // Remove contours and proceed
+                List<List<int[]>> new_conts = new ArrayList<>();
+                for (int ci = 0; ci < conts.size(); ci++) {
+                    if (!contours_to_remove.contains(ci)) {
+                        new_conts.add(conts.get(ci));
+                    }else{
+                        //IJ.log(String.format("contour %d, deleted", ci));
+                    }
+                }
+                // Replace conts with new_conts
+                conts = new_conts;
+                continue;
+            }
+
+            int c2_idx = c2_indices.get(0);
+            List<int[]> c2 = conts.get(c2_idx);
+
+            List<int[]> c2_points = new ArrayList<>(c2);
+            if (c2.get(0)[0] == V1[0] && c2.get(0)[1] == V1[1]) {
+                Collections.reverse(c2_points);
+            }
+
+            int c3_idx = c2_indices.get(1);
+            List<int[]> c3 = conts.get(c3_idx);
+
+            List<int[]> c3_points = new ArrayList<>(c3);
+            if (c3.get(c3.size() - 1)[0] == V1[0] && c3.get(c3.size() - 1)[1] == V1[1]) {
+                c3_points.remove(c3_points.size() - 1);
+                Collections.reverse(c3_points);
+            } else {
+                c3_points.remove(0);
+            }
+
+            List<int[]> c_new = new ArrayList<>(c2_points);
+            c_new.addAll(c3_points);
+
+            ctypes[idx] = 'e';
+            contours_to_remove.add(c1_idx);
+            contours_to_remove.add(c2_idx);
+            contours_to_remove.add(c3_idx);
+
+            contours_to_add.add(c_new);
+
+            // Remove contours to be removed
+            List<List<int[]>> new_conts = new ArrayList<>();
+            for (int ci = 0; ci < conts.size(); ci++) {
+                if (!contours_to_remove.contains(ci)) {
+                    new_conts.add(conts.get(ci));
+                }else{
+                    // IJ.log(String.format("contour %d, deleted", ci));
+                }
+            }
+            // Add the new contours
+            new_conts.addAll(contours_to_add);
+            // IJ.log(String.format("the size of contours %d to %d", conts.size(), new_conts.size()));
+            // Replace conts with new_conts
+            conts = new_conts;
+
+            // Remove the junction V1 from ijunc
+            Iterator<Vertex_> ijunc_it = ijunc.iterator();
+            boolean found_junction = false;
+            while (ijunc_it.hasNext()) {
+                Vertex_ j = ijunc_it.next();
+                if (j.x == V1[0] && j.y == V1[1]) {
+                    ijunc_it.remove();
+                    found_junction = true;
+                    break;
+                }
+            }
+            if (!found_junction) {
+                throw new RuntimeException("Unrecognized junction");
+            }
+        }
+
+        return conts;
+
+    }
+
     
     /**
      * Sets edge information based on contours and vertices.
@@ -671,6 +840,10 @@ public class ImageUtils_ {
         if (jr_num != er_num) {
             throw new RuntimeException(String.format("! Inconsistent out-vertex and out-edge, jr_num= %d, er_num= %d", jr_num, er_num));
         }
+
+        
+        // Point cpt = new Point(0,0);
+        // vxDraw_Vertex(ip, vedges, "output.png", 1500,cpt);
     
         return vedges;
     }
@@ -960,10 +1133,20 @@ public class ImageUtils_ {
         ImageUtils_.Pair<Integer, int[]> cellInfo = utlSet_CellID(ip, minimal_cell_size);
         cell_num = cellInfo.first;
         CellID = cellInfo.second;
-    
+        List<Integer> isolated_terminals = new ArrayList<>();
         // Set Vertex_
-        List<Vertex_> ivtx = Set_Vertex_(ip, ctypes, CellID);
-    
+        List<Vertex_> ivtx = Set_Vertex_(ip, ctypes, CellID, isolated_terminals);
+        IJ.log(String.format("isolated_terminals %d", isolated_terminals.size()));
+        edge_conts = Reconnect_Contours(ip, ctypes, edge_conts, ivtx, isolated_terminals);
+
+        IJ.log(String.format("The size of contours %d", edge_conts.size()));
+        // Sort by inout
+        ivtx.sort(JInOutComparator);
+        // Assign unique IDs
+        for (int i = 0; i < ivtx.size(); i++) {
+            ivtx.get(i).id = i;
+        }
+        
         // Set Edge_
         List<Edge_> iedge = Set_Edge_(ip, ctypes, edge_conts, ivtx);
     
