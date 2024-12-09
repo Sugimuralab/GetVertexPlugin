@@ -213,19 +213,6 @@ public class ImageUtils_ {
         int width = ip.getWidth();
         int height = ip.getHeight();
 
-        // Determine the type of ImageProcessor
-        if (ip instanceof ByteProcessor) {
-            System.out.println("The ImageProcessor is a ByteProcessor (8-bit grayscale).");
-        } else if (ip instanceof ShortProcessor) {
-            System.out.println("The ImageProcessor is a ShortProcessor (16-bit grayscale).");
-        } else if (ip instanceof FloatProcessor) {
-            System.out.println("The ImageProcessor is a FloatProcessor (32-bit floating point).");
-        } else if (ip instanceof ColorProcessor) {
-            System.out.println("The ImageProcessor is a ColorProcessor (RGB color).");
-        } else {
-            System.out.println("Unknown ImageProcessor type.");
-        }
-
         // Define 8-connected neighbor offsets
         int[] dx = {1, 1, 0, -1, -1, -1, 0, 1};
         int[] dy = {0, -1, -1, -1, 0, 1, 1, 1};
@@ -819,7 +806,7 @@ public class ImageUtils_ {
             // Calculate Euclidean distance
             tedge.sdist = Math.sqrt(Math.pow(firstPt[0] - lastPt[0], 2) + Math.pow(firstPt[1] - lastPt[1], 2));
             // Calculate angle
-            tedge.angle = Math.atan2(firstPt[1] - lastPt[1], firstPt[0] - lastPt[0]);
+            tedge.angle = -Math.atan2(firstPt[1] - lastPt[1], firstPt[0] - lastPt[0]);
             if (tedge.angle < 0) {
                 tedge.angle += Math.PI;
             }
@@ -985,19 +972,25 @@ public class ImageUtils_ {
                     if (nid == -1) {
                         throw new RuntimeException("Neighbor vertex not found");
                     }
+                    if(nvtx.nj_num == 1){
+                        throw new RuntimeException("nj_num == 1 in outside cell");
+                    }
+                    // IJ.log(String.format("nid = %d, pid = %d, nj_num = %d", nid, pid, nvtx.nj_num));
                     nid = (nid + 1) % nvtx.nj_num;
                     pid = nvtx.id;
+                    // IJ.log(String.format("nid => %d", nid));
+
                     nvtx = ivtx.get(nvtx.nj.get(nid));
                     if (nvtx.inout == 'o') {
                         break;
                     }
                 }
             
-                // Remove the duplicate last vertex
-                if (!tcell.VERTEX.isEmpty()) {
-                    tcell.VERTEX.remove(tcell.VERTEX.size() - 1);
-                }
-            
+                // // Remove the duplicate last vertex
+                // if (!tcell.VERTEX.isEmpty()) {
+                //     tcell.VERTEX.remove(tcell.VERTEX.size() - 1);
+                // }
+                tcell.VERTEX.add(nvtx);
                 vcells.add(tcell);
             }
         }
@@ -1139,6 +1132,14 @@ public class ImageUtils_ {
         IJ.log(String.format("isolated_terminals %d", isolated_terminals.size()));
         edge_conts = Reconnect_Contours(ip, ctypes, edge_conts, ivtx, isolated_terminals);
 
+        // *** Important Change ***
+        // After reconnection, we must recalculate vertices and edges because the topology has changed.
+        // The previous ivtx is no longer valid after edge_conts is modified.
+        List<Integer> no_isolated_terminals = new ArrayList<>();
+
+        // Recompute vertices with the updated contours and ctypes
+        ivtx = Set_Vertex_(ip, ctypes, CellID, no_isolated_terminals);
+
         IJ.log(String.format("The size of contours %d", edge_conts.size()));
         // Sort by inout
         ivtx.sort(JInOutComparator);
@@ -1152,6 +1153,8 @@ public class ImageUtils_ {
     
         // Set up vertices, outer cells, and inner cells
         Set_NVertices(ivtx, iedge);
+
+
         Set_OutsideCells(vcells, ivtx);
         Set_InsideCells(vcells, ivtx, iedge, cell_num);
     
@@ -1470,22 +1473,24 @@ public class ImageUtils_ {
      * @param vertices  A list of Vertex_ objects.
      * @param cpt        Coordinate offset (optional, default is (0, 0)).
      */
+
     public static void vxOut_by_Cells(List<VCell_> cells, List<Vertex_> vertices, Point cpt) {
         for (int i = 0; i < cells.size(); i++) {
             VCell_ cell = cells.get(i);
-            System.out.printf("# %d %d\n", i, cell.VERTEX.size());
+            IJ.log(String.format("# %d %d", i, cell.VERTEX.size()));
             for (int j = 0; j < cell.VERTEX.size() - 1; j++) {
                 Vertex_ current = cell.VERTEX.get(j);
                 Vertex_ next = cell.VERTEX.get(j + 1);
-                System.out.printf("%d %d\n", current.x, current.y);
-                System.out.printf("%d %d\n", next.x, next.y);
+                IJ.log(String.format("%d %d", current.x, current.y));
+                IJ.log(String.format("%d %d", next.x, next.y));
             }
             // Last vertex to first
             Vertex_ last = cell.VERTEX.get(cell.VERTEX.size() - 1);
             Vertex_ first = cell.VERTEX.get(0);
-            System.out.printf("%d %d\n", last.x, last.y);
-            System.out.printf("%d %d\n\n", first.x, first.y);
+            IJ.log(String.format("%d %d", last.x, last.y));
+            IJ.log(String.format("%d %d\n", first.x, first.y));
         }
     }
+
 
 }
