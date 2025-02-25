@@ -104,6 +104,7 @@ class CVUtil_ {
                         int ty = 0;
 
                         while (true) {
+                            boolean is_moved = false;
                             for (int k = 0; k < 8; k++) {
                                 int neighbor_idx = tid + npb[k];
                                 if (tV[neighbor_idx] == WHITE) {
@@ -127,8 +128,14 @@ class CVUtil_ {
                                     tV[tid] = 1;
                                     tid = neighbor_idx;
                                     tedge_length++;
+                                    is_moved = true;
                                     break;
                                 }
+                            }
+                            if(!is_moved){
+                                IJ.log(String.format("An irregular loop was detected at %d %d", tx, ty));
+                                IJ.error(String.format("An irregular loop was detected at %d %d", tx, ty));
+                                return null;
                             }
                             tx = tid % W;
                             ty = tid / W;

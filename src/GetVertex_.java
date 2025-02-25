@@ -45,8 +45,14 @@ public class GetVertex_ implements ij.plugin.PlugIn {
         IJ.log(" Frame = " + stackSize);
         IJ.log(" , W x H = " + imp.getWidth() + " x " + imp.getHeight());
         String directory = "";
+        String filename_index = "";
         // Process each frame
         for (int num = 1; num <= stackSize; num++) {
+            
+            if(stackSize >= 2){
+                filename_index = "_" + String.format("%04d", num);
+            }
+
             IJ.log("## frame: " + num + " / " + stackSize);
 
             // Get ImageProcessor for the current frame
@@ -63,18 +69,23 @@ public class GetVertex_ implements ij.plugin.PlugIn {
             croppedImage.show();
 
             // Check for four-block patterns
-            ImageUtils_.utlCheckFourBlock(croppedImage.getProcessor(), num, cpt);
+            if(ImageUtils_.utlCheckFourBlock(croppedImage.getProcessor(), num, cpt)){
+                return;
+            }
 
             // Boundary processing
             IJ.log(" > Start Boundary Deletion");
             ImageProcessor boundaryProcessedIP = ImageUtils_.utlBoundaryProcessing(croppedImage, cpt);
+            if(boundaryProcessedIP == null){
+                return;
+            }
             croppedImage.setProcessor(boundaryProcessedIP);
             IJ.log(" ... Finish Boundary Deletion");
 
             // Show and save the boundary-processed image
             IJ.log(" Show input images, surroundings are processed");
             croppedImage.show();
-            String bmpFilename = title + "_Frame_" + String.format("%04d", num) + ".bmp";
+            String bmpFilename = title + filename_index + ".bmp";
 
             if(num == 1){
                 SaveDialog sd = new SaveDialog("Save Output", bmpFilename, ".bmp");
@@ -90,6 +101,9 @@ public class GetVertex_ implements ij.plugin.PlugIn {
             IJ.log(" > Start Getting Vertex properties");
             ImageUtils_.Triple<List<VCell_>, List<Vertex_>, List<Edge_>> vertexResult =
                 ImageUtils_.vxSet_Vertex(croppedImage, MINIMAL_CELL_SIZE, cpt);
+            if(vertexResult == null){
+                return;
+            }
             List<VCell_> cells = vertexResult.first;
             List<Vertex_> junctions = vertexResult.second;
             List<Edge_> edges = vertexResult.third;
@@ -100,13 +114,13 @@ public class GetVertex_ implements ij.plugin.PlugIn {
             IJ.log(" ... Draw Polygon and save as PNG");
 
             // Output data to file
-            String outputFilename = title + "_" + String.format("%04d", num) + ".txt";
+            String outputFilename = title + filename_index + ".txt";
 
             ImageUtils_.vxOutputDatas(directory + outputFilename, junctions, edges, cells, cpt);
             IJ.log(" > Output data file: " + directory + outputFilename);
 
             // Draw Vertex image and save
-            String vertexImageFilename = "Vertex_" + title + "_" + String.format("%04d", num) + ".png";
+            String vertexImageFilename = "Vertex_" + title + filename_index + ".png";
             ImageUtils_.vxDraw_Vertex(ip, edges, directory + vertexImageFilename, WAITING_TIME, cpt);
             IJ.log(" > Output vertex image: " + directory + vertexImageFilename);
 

@@ -177,7 +177,7 @@ public class ImageUtils_ {
      * @param num  Frame number (for reporting).
      * @param cpt  Coordinate offset (optional, default is (0, 0)).
      */
-    public static void utlCheckFourBlock(ImageProcessor ip, int num, Point cpt) {
+    public static boolean utlCheckFourBlock(ImageProcessor ip, int num, Point cpt) {
         int bnum = 0;
         int width = ip.getWidth();
         int height = ip.getHeight();
@@ -188,7 +188,7 @@ public class ImageUtils_ {
                     if ((ip.getPixel(x + 1, y) & 0xFF) == (WHITE & 0xFF) &&
                         (ip.getPixel(x, y + 1) & 0xFF) == (WHITE & 0xFF) &&
                         (ip.getPixel(x + 1, y + 1) & 0xFF) == (WHITE & 0xFF)) {
-                        IJ.error(String.format("!! Unexpected Four-Block: frame %d, (%d %d)", num + 1, x + cpt.x, y + cpt.y));
+                        IJ.log(String.format("Unexpected Four-Block: frame %d, (%d %d)", num + 1, x + cpt.x, y + cpt.y));
                         bnum++;
                     }
                 }
@@ -197,7 +197,9 @@ public class ImageUtils_ {
 
         if (bnum > 0) {
             IJ.error("FOUR BLOCK PIXELS APPEAR, Modify Image");
+            return true;
         }
+        return false;
     }
 
     /**
@@ -311,7 +313,9 @@ public class ImageUtils_ {
 
         // Trace contours using CVUtil_.trace (assuming it returns List<List<int[]>>)
         List<List<int[]>> all_edges_traced = CVUtil_.trace(new ImagePlus("", ip), ctypes, cpt);
-
+        if(all_edges_traced == null){
+            return null;
+        }
         // Flood fill background with 1 again
         floodFillIP(ip, 0, 0, 1, rect);
 
@@ -411,9 +415,11 @@ public class ImageUtils_ {
 
                         if (area <= smallC) {
                             // Raise an error if the area is smaller than or equal to smallC
-                            String error_message = String.format("!!! Area Smaller than %d around (%d, %d)\nExit!", smallC, x, y);
-                            IJ.error(error_message);
-                            System.exit(1);
+                            String error_message = String.format("Area Smaller than %d around (%d, %d)", smallC, x, y);
+                            IJ.log(error_message);
+                            // IJ.error(error_message);
+                        
+                            return null;
                         }
                     }
 
@@ -1124,12 +1130,18 @@ public class ImageUtils_ {
     
         // Set CellID
         ImageUtils_.Pair<Integer, int[]> cellInfo = utlSet_CellID(ip, minimal_cell_size);
+        if(cellInfo == null){
+            return null;
+        }
         cell_num = cellInfo.first;
         CellID = cellInfo.second;
         List<Integer> isolated_terminals = new ArrayList<>();
         // Set Vertex_
         List<Vertex_> ivtx = Set_Vertex_(ip, ctypes, CellID, isolated_terminals);
         IJ.log(String.format("isolated_terminals %d", isolated_terminals.size()));
+        for(int i = 0; i < isolated_terminals.size(); i++){
+            IJ.log(String.format("Isolated terminal is found at %d %d. Check for the boundary.", isolated_terminals.get(i) % width, isolated_terminals.get(i) / width));
+        }
         edge_conts = Reconnect_Contours(ip, ctypes, edge_conts, ivtx, isolated_terminals);
 
         // *** Important Change ***
