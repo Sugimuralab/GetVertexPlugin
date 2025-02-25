@@ -10,4 +10,4 @@ GetVertex is a plugin for Fiji/ImageJ designed to analyze images that highlight 
 4. Ensure that the input image is free of errors (see here for examples of errors).
 5. Run `Get Vertex` from the `Plugins` menu.
 6. Select the directory where you want to save the output.
-7. The generated text file can be used as input for Bayesian force inference ([Python](https://github.com/IshiharaLab/BayesianForceInference), [Google Colab](https://github.com/Sugimuralab)) and Image-based parameter inference ([Least-squares](https://github.com/Sugimuralab/ImageBasedParameterInferenceForEpithelialMechanics), [Bayes](https://github.com/Sugimuralab/BayesianParameterInferenceForEpithelialMechanics)).
+7. The generated text file can be used as input for Bayesian force inference ([Python](https://github.com/IshiharaLab/BayesianForceInference), [Google Colab](https://github.com/Sugimuralab)) and Image-based parameter inference for epithelial mechanics ([Least-squares](https://github.com/Sugimuralab/ImageBasedParameterInferenceForEpithelialMechanics), [Bayes](https://github.com/Sugimuralab/BayesianParameterInferenceForEpithelialMechanics)).
