@@ -66,7 +66,7 @@ public class GetVertex_ implements ij.plugin.PlugIn {
             IJ.log(" img: W x H = " + croppedImage.getWidth() + " x " + croppedImage.getHeight());
 
             // Display cropped image
-            croppedImage.show();
+            // croppedImage.show();
 
             // Check for four-block patterns
             if(ImageUtils_.utlCheckFourBlock(croppedImage.getProcessor(), num, cpt)){
@@ -84,7 +84,7 @@ public class GetVertex_ implements ij.plugin.PlugIn {
 
             // Show and save the boundary-processed image
             IJ.log(" Show input images, surroundings are processed");
-            croppedImage.show();
+            // croppedImage.show();
             String bmpFilename = title + filename_index + ".bmp";
 
             if(num == 1){

@@ -375,7 +375,7 @@ public class ImageUtils_ {
      * @param smallC  Threshold for the minimum allowable cell area.
      * @return A Pair containing the total number of cells detected and the CellID array.
      */
-    public static Pair<Integer, int[]> utlSet_CellID(ImageProcessor ip, int smallC) {
+    public static Pair<Integer, int[]> utlSet_CellID(ImageProcessor ip, int smallC, Point cpt) {
         int width = ip.getWidth();
         int height = ip.getHeight();
 
@@ -415,7 +415,7 @@ public class ImageUtils_ {
 
                         if (area <= smallC) {
                             // Raise an error if the area is smaller than or equal to smallC
-                            String error_message = String.format("Area Smaller than %d around (%d, %d)", smallC, x, y);
+                            String error_message = String.format("Area Smaller than %d around (%d, %d)", smallC, x + cpt.x, y + cpt.y);
                             IJ.log(error_message);
                             // IJ.error(error_message);
                         
@@ -1129,7 +1129,7 @@ public class ImageUtils_ {
         edge_conts = CVUtil_.trace(timg, ctypes, cpt); // Assuming CVUtil_.trace returns List<List<int[]>>
     
         // Set CellID
-        ImageUtils_.Pair<Integer, int[]> cellInfo = utlSet_CellID(ip, minimal_cell_size);
+        ImageUtils_.Pair<Integer, int[]> cellInfo = utlSet_CellID(ip, minimal_cell_size, cpt);
         if(cellInfo == null){
             return null;
         }
